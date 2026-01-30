@@ -1,5 +1,5 @@
 [package]
-name = "cli"
+name = "roundtrip_latency_test"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,4 +7,3 @@ edition = "2021"
 spacetimedb-sdk.workspace = true
 anyhow.workspace = true
 clap.workspace = true
-tokio.workspace = true
