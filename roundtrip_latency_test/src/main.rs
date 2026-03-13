@@ -1,6 +1,5 @@
 mod generated;
 
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -8,7 +7,7 @@ use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use generated::append_message_reducer::append_message;
 use generated::DbConnection;
-use spacetimedb_sdk::{DbContext, Status};
+use spacetimedb_sdk::DbContext;
 
 const SERVER: &str = "http://127.0.0.1:3000";
 const DATABASE: &str = "view-latency";
@@ -33,28 +32,20 @@ enum SubscribeTo {
     None,
 }
 
-/// Tracks reducer round-trip times by message content
+/// Tracks reducer round-trip latencies
 struct RoundtripTimer {
-    pending: HashMap<String, Instant>,
     latencies: Vec<Duration>,
 }
 
 impl RoundtripTimer {
     fn new() -> Self {
         Self {
-            pending: HashMap::new(),
             latencies: Vec::new(),
         }
     }
 
-    fn start(&mut self, content: String) {
-        self.pending.insert(content, Instant::now());
-    }
-
-    fn stop(&mut self, content: &str) {
-        if let Some(start) = self.pending.remove(content) {
-            self.latencies.push(start.elapsed());
-        }
+    fn record(&mut self, duration: Duration) {
+        self.latencies.push(duration);
     }
 
     fn stats(&self) -> LatencyStats {
@@ -108,7 +99,7 @@ fn run_test(subscribe_to: SubscribeTo) -> Result<()> {
     // Build connection
     let conn = DbConnection::builder()
         .with_uri(SERVER)
-        .with_module_name(DATABASE)
+        .with_database_name(DATABASE)
         .on_connect({
             let ready_tx = ready_tx.clone();
             move |ctx, _identity, _token| {
@@ -153,19 +144,6 @@ fn run_test(subscribe_to: SubscribeTo) -> Result<()> {
         })
         .build()?;
 
-    // Track reducer confirmations by content
-    let timer_for_reducer = roundtrip_timer.clone();
-    let batch_done_tx_for_reducer = batch_done_tx.clone();
-    conn.reducers.on_append_message(move |ctx, content| {
-        if let Status::Committed = &ctx.event.status {
-            let mut timer = timer_for_reducer.lock().unwrap();
-            timer.stop(content);
-            if timer.completed_count() as u64 >= BATCH_SIZE {
-                let _ = batch_done_tx_for_reducer.send(());
-            }
-        }
-    });
-
     conn.run_threaded();
 
     ready_rx.recv()?;
@@ -185,11 +163,24 @@ fn run_test(subscribe_to: SubscribeTo) -> Result<()> {
 
         for i in 0..BATCH_SIZE {
             let content = format!("batch{}_message{}", batch, i);
-            {
-                let mut timer = roundtrip_timer.lock().unwrap();
-                timer.start(content.clone());
-            }
-            conn.reducers.append_message(content)?;
+            let start = Instant::now();
+            conn.reducers.append_message_then(content, {
+                let timer = roundtrip_timer.clone();
+                let done_tx = batch_done_tx.clone();
+                move |_ctx, result| {
+                    match result {
+                        Ok(Ok(())) => {
+                            let mut t = timer.lock().unwrap();
+                            t.record(start.elapsed());
+                            if t.completed_count() as u64 >= BATCH_SIZE {
+                                let _ = done_tx.send(());
+                            }
+                        }
+                        Ok(Err(err)) => eprintln!("Reducer failed: {err}"),
+                        Err(err) => eprintln!("Internal error: {err:?}"),
+                    }
+                }
+            })?;
         }
 
         batch_done_rx.recv_timeout(Duration::from_secs(60))?;

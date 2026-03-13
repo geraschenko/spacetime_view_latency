@@ -1,6 +1,6 @@
-use spacetimedb::{reducer, table, view, Query, ReducerContext, Table, ViewContext};
+use spacetimedb::{reducer, table, view, AnonymousViewContext, Query, ReducerContext, Table};
 
-#[table(name = messages, public)]
+#[table(accessor = messages, public)]
 pub struct Message {
     #[primary_key]
     #[auto_inc]
@@ -8,9 +8,9 @@ pub struct Message {
     pub content: String,
 }
 
-#[view(name = messages_view, public)]
-pub fn messages_view(ctx: &ViewContext) -> Query<Message> {
-    ctx.from.messages().build()
+#[view(accessor = messages_view, public)]
+pub fn messages_view(ctx: &AnonymousViewContext) -> impl Query<Message> {
+    ctx.from.messages()
 }
 
 #[reducer]
