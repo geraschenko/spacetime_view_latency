@@ -9,7 +9,6 @@ use generated::append_message_reducer::append_message;
 use generated::DbConnection;
 use spacetimedb_sdk::DbContext;
 
-const SERVER: &str = "http://127.0.0.1:3000";
 const DATABASE: &str = "view-latency";
 const BATCH_SIZE: u64 = 100;
 const NUM_BATCHES: u64 = 10;
@@ -20,6 +19,14 @@ struct Cli {
     /// What to subscribe to: view, table, or none
     #[arg(long, value_enum, default_value = "view")]
     subscribe_to: SubscribeTo,
+
+    /// Server URL
+    #[arg(long, default_value = "http://127.0.0.1:3000")]
+    server: String,
+
+    /// Disable confirmed reads (reduces latency but sacrifices durability guarantees)
+    #[arg(long)]
+    no_confirmed_reads: bool,
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum)]
@@ -82,12 +89,16 @@ struct LatencyStats {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    run_test(cli.subscribe_to)
+    run_test(&cli)
 }
 
-fn run_test(subscribe_to: SubscribeTo) -> Result<()> {
+fn run_test(cli: &Cli) -> Result<()> {
+    let subscribe_to = cli.subscribe_to;
+
     println!("=== View Latency Scaling Test ===");
+    println!("Server: {}", cli.server);
     println!("Subscribe to: {:?}", subscribe_to);
+    println!("Confirmed reads: {}", !cli.no_confirmed_reads);
     println!("Batch size: {}, Batches: {}", BATCH_SIZE, NUM_BATCHES);
     println!();
 
@@ -97,9 +108,15 @@ fn run_test(subscribe_to: SubscribeTo) -> Result<()> {
     let (batch_done_tx, batch_done_rx) = std::sync::mpsc::channel::<()>();
 
     // Build connection
-    let conn = DbConnection::builder()
-        .with_uri(SERVER)
-        .with_database_name(DATABASE)
+    let mut builder = DbConnection::builder()
+        .with_uri(&cli.server)
+        .with_database_name(DATABASE);
+
+    if cli.no_confirmed_reads {
+        builder = builder.with_confirmed_reads(false);
+    }
+
+    let conn = builder
         .on_connect({
             let ready_tx = ready_tx.clone();
             move |ctx, _identity, _token| {
