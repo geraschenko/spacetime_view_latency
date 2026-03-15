@@ -78,18 +78,82 @@ impl<'ctx> __sdk::Table for MessagesViewTableHandle<'ctx> {
     }
 }
 
+pub struct MessagesViewUpdateCallbackId(__sdk::CallbackId);
+
+impl<'ctx> __sdk::TableWithPrimaryKey for MessagesViewTableHandle<'ctx> {
+    type UpdateCallbackId = MessagesViewUpdateCallbackId;
+
+    fn on_update(
+        &self,
+        callback: impl FnMut(&Self::EventContext, &Self::Row, &Self::Row) + Send + 'static,
+    ) -> MessagesViewUpdateCallbackId {
+        MessagesViewUpdateCallbackId(self.imp.on_update(Box::new(callback)))
+    }
+
+    fn remove_on_update(&self, callback: MessagesViewUpdateCallbackId) {
+        self.imp.remove_on_update(callback.0)
+    }
+}
+
+/// Access to the `id` unique index on the table `messages_view`,
+/// which allows point queries on the field of the same name
+/// via the [`MessagesViewIdUnique::find`] method.
+///
+/// Users are encouraged not to explicitly reference this type,
+/// but to directly chain method calls,
+/// like `ctx.db.messages_view().id().find(...)`.
+pub struct MessagesViewIdUnique<'ctx> {
+    imp: __sdk::UniqueConstraintHandle<Message, u64>,
+    phantom: std::marker::PhantomData<&'ctx super::RemoteTables>,
+}
+
+impl<'ctx> MessagesViewTableHandle<'ctx> {
+    /// Get a handle on the `id` unique index on the table `messages_view`.
+    pub fn id(&self) -> MessagesViewIdUnique<'ctx> {
+        MessagesViewIdUnique {
+            imp: self.imp.get_unique_constraint::<u64>("id"),
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'ctx> MessagesViewIdUnique<'ctx> {
+    /// Find the subscribed row whose `id` column value is equal to `col_val`,
+    /// if such a row is present in the client cache.
+    pub fn find(&self, col_val: &u64) -> Option<Message> {
+        self.imp.find(col_val)
+    }
+}
+
 #[doc(hidden)]
 pub(super) fn register_table(client_cache: &mut __sdk::ClientCache<super::RemoteModule>) {
     let _table = client_cache.get_or_make_table::<Message>("messages_view");
+    _table.add_unique_constraint::<u64>("id", |row| &row.id);
 }
 
 #[doc(hidden)]
 pub(super) fn parse_table_update(
-    raw_updates: __ws::TableUpdate<__ws::BsatnFormat>,
+    raw_updates: __ws::v2::TableUpdate,
 ) -> __sdk::Result<__sdk::TableUpdate<Message>> {
     __sdk::TableUpdate::parse_table_update(raw_updates).map_err(|e| {
         __sdk::InternalError::failed_parse("TableUpdate<Message>", "TableUpdate")
             .with_cause(e)
             .into()
     })
+}
+
+#[allow(non_camel_case_types)]
+/// Extension trait for query builder access to the table `Message`.
+///
+/// Implemented for [`__sdk::QueryTableAccessor`].
+pub trait messages_viewQueryTableAccess {
+    #[allow(non_snake_case)]
+    /// Get a query builder for the table `Message`.
+    fn messages_view(&self) -> __sdk::__query_builder::Table<Message>;
+}
+
+impl messages_viewQueryTableAccess for __sdk::QueryTableAccessor {
+    fn messages_view(&self) -> __sdk::__query_builder::Table<Message> {
+        __sdk::__query_builder::Table::new("messages_view")
+    }
 }

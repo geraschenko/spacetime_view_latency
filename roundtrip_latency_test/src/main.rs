@@ -1,6 +1,5 @@
 mod generated;
 
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -8,9 +7,8 @@ use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use generated::append_message_reducer::append_message;
 use generated::DbConnection;
-use spacetimedb_sdk::{DbContext, Status};
+use spacetimedb_sdk::DbContext;
 
-const SERVER: &str = "http://127.0.0.1:3000";
 const DATABASE: &str = "view-latency";
 const BATCH_SIZE: u64 = 100;
 const NUM_BATCHES: u64 = 10;
@@ -21,6 +19,14 @@ struct Cli {
     /// What to subscribe to: view, table, or none
     #[arg(long, value_enum, default_value = "view")]
     subscribe_to: SubscribeTo,
+
+    /// Server URL
+    #[arg(long, default_value = "http://127.0.0.1:3000")]
+    server: String,
+
+    /// Disable confirmed reads (reduces latency but sacrifices durability guarantees)
+    #[arg(long)]
+    no_confirmed_reads: bool,
 }
 
 #[derive(Debug, Copy, Clone, ValueEnum)]
@@ -33,28 +39,20 @@ enum SubscribeTo {
     None,
 }
 
-/// Tracks reducer round-trip times by message content
+/// Tracks reducer round-trip latencies
 struct RoundtripTimer {
-    pending: HashMap<String, Instant>,
     latencies: Vec<Duration>,
 }
 
 impl RoundtripTimer {
     fn new() -> Self {
         Self {
-            pending: HashMap::new(),
             latencies: Vec::new(),
         }
     }
 
-    fn start(&mut self, content: String) {
-        self.pending.insert(content, Instant::now());
-    }
-
-    fn stop(&mut self, content: &str) {
-        if let Some(start) = self.pending.remove(content) {
-            self.latencies.push(start.elapsed());
-        }
+    fn record(&mut self, duration: Duration) {
+        self.latencies.push(duration);
     }
 
     fn stats(&self) -> LatencyStats {
@@ -91,12 +89,16 @@ struct LatencyStats {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    run_test(cli.subscribe_to)
+    run_test(&cli)
 }
 
-fn run_test(subscribe_to: SubscribeTo) -> Result<()> {
+fn run_test(cli: &Cli) -> Result<()> {
+    let subscribe_to = cli.subscribe_to;
+
     println!("=== View Latency Scaling Test ===");
+    println!("Server: {}", cli.server);
     println!("Subscribe to: {:?}", subscribe_to);
+    println!("Confirmed reads: {}", !cli.no_confirmed_reads);
     println!("Batch size: {}, Batches: {}", BATCH_SIZE, NUM_BATCHES);
     println!();
 
@@ -106,45 +108,49 @@ fn run_test(subscribe_to: SubscribeTo) -> Result<()> {
     let (batch_done_tx, batch_done_rx) = std::sync::mpsc::channel::<()>();
 
     // Build connection
-    let conn = DbConnection::builder()
-        .with_uri(SERVER)
-        .with_module_name(DATABASE)
+    let mut builder = DbConnection::builder()
+        .with_uri(&cli.server)
+        .with_database_name(DATABASE);
+
+    if cli.no_confirmed_reads {
+        builder = builder.with_confirmed_reads(false);
+    }
+
+    let conn = builder
         .on_connect({
             let ready_tx = ready_tx.clone();
-            move |ctx, _identity, _token| {
-                match subscribe_to {
-                    SubscribeTo::View => {
-                        ctx.subscription_builder()
-                            .on_applied({
-                                let ready_tx = ready_tx.clone();
-                                move |_ctx| {
-                                    println!("Subscription applied (view)");
-                                    let _ = ready_tx.send(());
-                                }
-                            })
-                            .on_error(|_ctx, err| {
-                                eprintln!("Subscription error: {:?}", err);
-                            })
-                            .subscribe(["SELECT * FROM messages_view"]);
-                    }
-                    SubscribeTo::Table => {
-                        ctx.subscription_builder()
-                            .on_applied({
-                                let ready_tx = ready_tx.clone();
-                                move |_ctx| {
-                                    println!("Subscription applied (table)");
-                                    let _ = ready_tx.send(());
-                                }
-                            })
-                            .on_error(|_ctx, err| {
-                                eprintln!("Subscription error: {:?}", err);
-                            })
-                            .subscribe(["SELECT * FROM messages"]);
-                    }
-                    SubscribeTo::None => {
-                        println!("No subscription");
-                        let _ = ready_tx.send(());
-                    }
+            move |ctx, _identity, _token| match subscribe_to {
+                SubscribeTo::View => {
+                    ctx.subscription_builder()
+                        .on_applied({
+                            let ready_tx = ready_tx.clone();
+                            move |_ctx| {
+                                println!("Subscription applied (view)");
+                                let _ = ready_tx.send(());
+                            }
+                        })
+                        .on_error(|_ctx, err| {
+                            eprintln!("Subscription error: {:?}", err);
+                        })
+                        .subscribe(["SELECT * FROM messages_view"]);
+                }
+                SubscribeTo::Table => {
+                    ctx.subscription_builder()
+                        .on_applied({
+                            let ready_tx = ready_tx.clone();
+                            move |_ctx| {
+                                println!("Subscription applied (table)");
+                                let _ = ready_tx.send(());
+                            }
+                        })
+                        .on_error(|_ctx, err| {
+                            eprintln!("Subscription error: {:?}", err);
+                        })
+                        .subscribe(["SELECT * FROM messages"]);
+                }
+                SubscribeTo::None => {
+                    println!("No subscription");
+                    let _ = ready_tx.send(());
                 }
             }
         })
@@ -152,19 +158,6 @@ fn run_test(subscribe_to: SubscribeTo) -> Result<()> {
             eprintln!("Connection error: {:?}", err);
         })
         .build()?;
-
-    // Track reducer confirmations by content
-    let timer_for_reducer = roundtrip_timer.clone();
-    let batch_done_tx_for_reducer = batch_done_tx.clone();
-    conn.reducers.on_append_message(move |ctx, content| {
-        if let Status::Committed = &ctx.event.status {
-            let mut timer = timer_for_reducer.lock().unwrap();
-            timer.stop(content);
-            if timer.completed_count() as u64 >= BATCH_SIZE {
-                let _ = batch_done_tx_for_reducer.send(());
-            }
-        }
-    });
 
     conn.run_threaded();
 
@@ -185,11 +178,22 @@ fn run_test(subscribe_to: SubscribeTo) -> Result<()> {
 
         for i in 0..BATCH_SIZE {
             let content = format!("batch{}_message{}", batch, i);
-            {
-                let mut timer = roundtrip_timer.lock().unwrap();
-                timer.start(content.clone());
-            }
-            conn.reducers.append_message(content)?;
+            let start = Instant::now();
+            conn.reducers.append_message_then(content, {
+                let timer = roundtrip_timer.clone();
+                let done_tx = batch_done_tx.clone();
+                move |_ctx, result| match result {
+                    Ok(Ok(())) => {
+                        let mut t = timer.lock().unwrap();
+                        t.record(start.elapsed());
+                        if t.completed_count() as u64 >= BATCH_SIZE {
+                            let _ = done_tx.send(());
+                        }
+                    }
+                    Ok(Err(err)) => eprintln!("Reducer failed: {err}"),
+                    Err(err) => eprintln!("Internal error: {err:?}"),
+                }
+            })?;
         }
 
         batch_done_rx.recv_timeout(Duration::from_secs(60))?;
@@ -204,7 +208,10 @@ fn run_test(subscribe_to: SubscribeTo) -> Result<()> {
 
     // Summary
     println!("=== SUMMARY ===");
-    println!("{:>15} {:>12} {:>12} {:>12}", "Total messages", "Avg (ms)", "P50 (ms)", "P99 (ms)");
+    println!(
+        "{:>15} {:>12} {:>12} {:>12}",
+        "Total messages", "Avg (ms)", "P50 (ms)", "P99 (ms)"
+    );
     for (total, stats) in &all_stats {
         println!(
             "{:>10} {:>12.2} {:>12.2} {:>12.2}",

@@ -14,3 +14,39 @@ pub struct Message {
 impl __sdk::InModule for Message {
     type Module = super::RemoteModule;
 }
+
+/// Column accessor struct for the table `Message`.
+///
+/// Provides typed access to columns for query building.
+pub struct MessageCols {
+    pub id: __sdk::__query_builder::Col<Message, u64>,
+    pub content: __sdk::__query_builder::Col<Message, String>,
+}
+
+impl __sdk::__query_builder::HasCols for Message {
+    type Cols = MessageCols;
+    fn cols(table_name: &'static str) -> Self::Cols {
+        MessageCols {
+            id: __sdk::__query_builder::Col::new(table_name, "id"),
+            content: __sdk::__query_builder::Col::new(table_name, "content"),
+        }
+    }
+}
+
+/// Indexed column accessor struct for the table `Message`.
+///
+/// Provides typed access to indexed columns for query building.
+pub struct MessageIxCols {
+    pub id: __sdk::__query_builder::IxCol<Message, u64>,
+}
+
+impl __sdk::__query_builder::HasIxCols for Message {
+    type IxCols = MessageIxCols;
+    fn ix_cols(table_name: &'static str) -> Self::IxCols {
+        MessageIxCols {
+            id: __sdk::__query_builder::IxCol::new(table_name, "id"),
+        }
+    }
+}
+
+impl __sdk::__query_builder::CanBeLookupTable for Message {}
