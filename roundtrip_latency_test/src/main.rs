@@ -119,40 +119,38 @@ fn run_test(cli: &Cli) -> Result<()> {
     let conn = builder
         .on_connect({
             let ready_tx = ready_tx.clone();
-            move |ctx, _identity, _token| {
-                match subscribe_to {
-                    SubscribeTo::View => {
-                        ctx.subscription_builder()
-                            .on_applied({
-                                let ready_tx = ready_tx.clone();
-                                move |_ctx| {
-                                    println!("Subscription applied (view)");
-                                    let _ = ready_tx.send(());
-                                }
-                            })
-                            .on_error(|_ctx, err| {
-                                eprintln!("Subscription error: {:?}", err);
-                            })
-                            .subscribe(["SELECT * FROM messages_view"]);
-                    }
-                    SubscribeTo::Table => {
-                        ctx.subscription_builder()
-                            .on_applied({
-                                let ready_tx = ready_tx.clone();
-                                move |_ctx| {
-                                    println!("Subscription applied (table)");
-                                    let _ = ready_tx.send(());
-                                }
-                            })
-                            .on_error(|_ctx, err| {
-                                eprintln!("Subscription error: {:?}", err);
-                            })
-                            .subscribe(["SELECT * FROM messages"]);
-                    }
-                    SubscribeTo::None => {
-                        println!("No subscription");
-                        let _ = ready_tx.send(());
-                    }
+            move |ctx, _identity, _token| match subscribe_to {
+                SubscribeTo::View => {
+                    ctx.subscription_builder()
+                        .on_applied({
+                            let ready_tx = ready_tx.clone();
+                            move |_ctx| {
+                                println!("Subscription applied (view)");
+                                let _ = ready_tx.send(());
+                            }
+                        })
+                        .on_error(|_ctx, err| {
+                            eprintln!("Subscription error: {:?}", err);
+                        })
+                        .subscribe(["SELECT * FROM messages_view"]);
+                }
+                SubscribeTo::Table => {
+                    ctx.subscription_builder()
+                        .on_applied({
+                            let ready_tx = ready_tx.clone();
+                            move |_ctx| {
+                                println!("Subscription applied (table)");
+                                let _ = ready_tx.send(());
+                            }
+                        })
+                        .on_error(|_ctx, err| {
+                            eprintln!("Subscription error: {:?}", err);
+                        })
+                        .subscribe(["SELECT * FROM messages"]);
+                }
+                SubscribeTo::None => {
+                    println!("No subscription");
+                    let _ = ready_tx.send(());
                 }
             }
         })
@@ -184,18 +182,16 @@ fn run_test(cli: &Cli) -> Result<()> {
             conn.reducers.append_message_then(content, {
                 let timer = roundtrip_timer.clone();
                 let done_tx = batch_done_tx.clone();
-                move |_ctx, result| {
-                    match result {
-                        Ok(Ok(())) => {
-                            let mut t = timer.lock().unwrap();
-                            t.record(start.elapsed());
-                            if t.completed_count() as u64 >= BATCH_SIZE {
-                                let _ = done_tx.send(());
-                            }
+                move |_ctx, result| match result {
+                    Ok(Ok(())) => {
+                        let mut t = timer.lock().unwrap();
+                        t.record(start.elapsed());
+                        if t.completed_count() as u64 >= BATCH_SIZE {
+                            let _ = done_tx.send(());
                         }
-                        Ok(Err(err)) => eprintln!("Reducer failed: {err}"),
-                        Err(err) => eprintln!("Internal error: {err:?}"),
                     }
+                    Ok(Err(err)) => eprintln!("Reducer failed: {err}"),
+                    Err(err) => eprintln!("Internal error: {err:?}"),
                 }
             })?;
         }
@@ -212,7 +208,10 @@ fn run_test(cli: &Cli) -> Result<()> {
 
     // Summary
     println!("=== SUMMARY ===");
-    println!("{:>15} {:>12} {:>12} {:>12}", "Total messages", "Avg (ms)", "P50 (ms)", "P99 (ms)");
+    println!(
+        "{:>15} {:>12} {:>12} {:>12}",
+        "Total messages", "Avg (ms)", "P50 (ms)", "P99 (ms)"
+    );
     for (total, stats) in &all_stats {
         println!(
             "{:>10} {:>12.2} {:>12.2} {:>12.2}",
