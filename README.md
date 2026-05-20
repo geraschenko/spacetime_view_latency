@@ -51,11 +51,11 @@ $ spacetime publish view-latency --bin-path target/wasm32-unknown-unknown/releas
       1000        34.62        35.32        61.21
 ```
 
-## Update: issue still present with SpacetimeDB v2.0.5
+## Update: issue still present with SpacetimeDB v2.2.0
 
 (The above tests were done with v1.11.3)
 
-Also noteworthy is that the default is now "confirmed reads" (wait for roundtrip, IIUC). Even with everything running on the same machine, confirmation adds ~30ms of latency.
+Also noteworthy is that the default is now "confirmed reads" (wait for roundtrip, IIUC). Even with everything running on the same machine, confirmation adds ~20ms of latency. I bumped the batch size up from 100 to 1000 messages because with batches of 100 and confirmed reads on, the effect was not easy to see. With batches of 1000, it's very clear.
 
 Here are the numbers when subscribing to the view table, with and without confirmed reads:
 ```
@@ -63,31 +63,31 @@ $ spacetime publish view-latency --bin-path target/wasm32-unknown-unknown/releas
   ./target/release/roundtrip_latency_test --server http://127.0.0.1:4000 --subscribe-to view
 === SUMMARY ===
  Total messages     Avg (ms)     P50 (ms)     P99 (ms)
-       100        34.48        34.83        34.97
-       200        43.33        49.28        49.40
-       300        43.83        46.46        56.03
-       400        41.65        41.62        51.10
-       500        43.89        43.84        53.22
-       600        48.58        47.00        57.03
-       700        42.59        39.94        57.20
-       800        49.97        47.88        68.40
-       900        52.64        55.58        65.80
-      1000        56.04        56.70        78.16
+      1000        93.91        75.53       207.95
+      2000       231.90       224.92       483.13
+      3000       392.34       384.65       785.04
+      4000       546.26       531.76      1103.91
+      5000       692.85       677.63      1374.30
+      6000       836.93       821.84      1685.42
+      7000      1014.01      1015.26      2012.19
+      8000      1151.23      1149.68      2300.73
+      9000      1297.37      1283.23      2598.40
+     10000      1448.20      1431.99      2894.06
 
 $ spacetime publish view-latency --bin-path target/wasm32-unknown-unknown/release/module.wasm --server http://127.0.0.1:4000 --clear-database --yes &&
   ./target/release/roundtrip_latency_test --server http://127.0.0.1:4000 --subscribe-to view --no-confirmed-reads
 === SUMMARY ===
  Total messages     Avg (ms)     P50 (ms)     P99 (ms)
-       100         5.90         5.96         8.95
-       200        14.72        16.77        22.46
-       300        20.79        23.40        32.30
-       400        18.46        16.32        30.45
-       500        21.74        22.97        34.56
-       600        25.03        26.38        41.86
-       700        25.70        26.11        43.53
-       800        25.81        27.11        45.99
-       900        25.41        25.87        49.26
-      1000        32.91        34.73        55.83
+      1000        71.12        60.09       179.03
+      2000       219.05       208.20       471.91
+      3000       369.18       356.53       770.28
+      4000       513.83       502.01      1058.61
+      5000       667.33       656.03      1357.19
+      6000       813.82       802.20      1654.01
+      7000       968.09       959.19      1962.16
+      8000      1109.89      1094.05      2244.93
+      9000      1268.35      1254.78      2555.51
+     10000      1424.92      1411.83      2866.10
 ```
 
 Here are the numbers when subscribing to the table directly, with and without confirmed reads:
@@ -96,29 +96,29 @@ $ spacetime publish view-latency --bin-path target/wasm32-unknown-unknown/releas
   ./target/release/roundtrip_latency_test --server http://127.0.0.1:4000 --subscribe-to table
 === SUMMARY ===
  Total messages     Avg (ms)     P50 (ms)     P99 (ms)
-       100        33.92        34.28        34.42
-       200        34.11        34.46        34.57
-       300        33.30        33.64        33.76
-       400        31.83        32.14        32.30
-       500        38.15        38.57        38.72
-       600        33.83        34.21        34.34
-       700        33.74        34.11        34.23
-       800        34.26        34.60        34.64
-       900        40.61        41.01        41.30
-      1000        56.90        57.65        57.70
+      1000        54.21        47.46        65.89
+      2000        27.83        32.58        33.51
+      3000        43.96        45.30        55.17
+      4000        41.77        43.23        52.97
+      5000        45.07        43.45        53.06
+      6000        41.80        42.56        52.85
+      7000        41.63        43.35        51.83
+      8000        35.70        32.75        41.71
+      9000        44.56        49.51        67.56
+     10000        40.60        41.82        51.56
 
 $ spacetime publish view-latency --bin-path target/wasm32-unknown-unknown/release/module.wasm --server http://127.0.0.1:4000 --clear-database --yes &&
   ./target/release/roundtrip_latency_test --server http://127.0.0.1:4000 --subscribe-to table --no-confirmed-reads
 === SUMMARY ===
  Total messages     Avg (ms)     P50 (ms)     P99 (ms)
-       100         4.68         4.75         5.82
-       200         7.25         7.81         9.67
-       300         6.91         7.27         8.81
-       400         5.87         6.20         7.77
-       500         3.75         3.85         5.31
-       600         5.38         5.71         7.03
-       700         5.30         5.70         7.01
-       800         7.09         7.81         9.52
-       900         8.73         9.29        11.73
-      1000         3.84         4.06         5.55
+      1000        11.81        12.70        19.59
+      2000        15.49        14.87        27.25
+      3000        13.79        13.48        25.05
+      4000        11.88        12.69        22.34
+      5000        15.59        16.39        25.25
+      6000        14.92        16.21        23.55
+      7000        19.51        20.50        30.27
+      8000        17.88        18.98        25.93
+      9000        14.59        15.86        21.46
+     10000        15.83        15.93        26.55
 ```
