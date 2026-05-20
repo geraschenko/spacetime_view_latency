@@ -10,7 +10,7 @@ use generated::DbConnection;
 use spacetimedb_sdk::DbContext;
 
 const DATABASE: &str = "view-latency";
-const BATCH_SIZE: u64 = 100;
+const BATCH_SIZE: u64 = 1000;
 const NUM_BATCHES: u64 = 10;
 const BATCH_DELAY_MS: u64 = 100;
 
