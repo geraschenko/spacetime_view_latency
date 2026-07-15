@@ -1,0 +1,8 @@
+collected_at=2026-07-15T21:38:57Z
+git_revision=ca20bec8e58662edb452ba24db717e51c8eea360
+server_url=http://127.0.0.1:3000
+spacetime Path: /home/anton/.local/share/spacetime/bin/2.6.1/spacetimedb-cli
+Commit: 052c83fe984a4c4eb7bb4f9afa5c6b1903891d87
+spacetimedb tool version 2.6.1; spacetimedb-lib version 2.6.1;
+rustc 1.97.0 (2d8144b78 2026-07-07)
+cargo 1.97.0 (c980f4866 2026-06-30)

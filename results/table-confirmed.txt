@@ -1,0 +1,20 @@
+=== View Latency Scaling Test ===
+Server: http://127.0.0.1:3000
+Subscribe to: Table
+Confirmed reads: true
+Batch size: 1000, Batches: 10
+
+Subscription applied (table)
+
+=== SUMMARY ===
+ Total messages     Avg (ms)     P50 (ms)     P99 (ms)
+      1000        42.50        39.20        48.10
+      2000        23.79        23.83        24.49
+      3000        34.06        34.30        34.79
+      4000        34.86        34.80        35.64
+      5000        35.08        35.21        35.71
+      6000        34.03        34.14        34.63
+      7000        34.14        34.28        34.88
+      8000        34.36        34.54        35.16
+      9000        32.38        32.49        33.03
+     10000        33.01        33.13        33.79
