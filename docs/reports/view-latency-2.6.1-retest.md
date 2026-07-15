@@ -103,3 +103,5 @@ spacetime publish view-latency --bin-path target/wasm32-unknown-unknown/release/
 ```
 
 Each arm prints a ten-row `=== SUMMARY ===` block through 10,000 messages. The signal is the shape difference between the arms: view `avg_ms` rises steeply with row count while table `avg_ms` stays approximately flat. Absolute magnitudes depend on the host and regime and are not expected to match the aggregate above.
+
+**Separate command-path confirmation.** As a separate check — **not pooled into the nine-view / three-table aggregate above** — this exact command path was run once per arm from a fresh database on the same 2.6.1 standalone server. Both arms completed cleanly through all ten doses to 10,000 rows. The view arm rose from `avg_ms` 168.03 at 1,000 rows to 4,214.18 at 10,000 rows (~25×); the table arm stayed flat, 12.29 at 1,000 rows to 10.03 at 10,000 rows (~0.8×). This reproduces the view-grows / table-flat shape through the documented path, on a single run rather than the replicated study.
