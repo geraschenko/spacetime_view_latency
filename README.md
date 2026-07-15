@@ -122,3 +122,51 @@ $ spacetime publish view-latency --bin-path target/wasm32-unknown-unknown/releas
       9000        14.59        15.86        21.46
      10000        15.83        15.93        26.55
 ```
+
+## Update: issue still present with SpacetimeDB v2.6.1
+
+Retested on official SpacetimeDB v2.6.1 with the same module and client (the original concurrent path, batches of 1000, confirmed reads on). The behavior is still here: **view-subscription round-trip latency grows roughly linearly with row count, while table-subscription latency stays roughly flat.**
+
+Across 9 complete view runs and 3 complete table runs (10 doses each, 1,000 → 10,000 rows), the view arm averages ~164 ms at 1,000 rows and ~4,027 ms at 10,000 rows (~427 ms per 1,000 rows, linear-fit R² > 0.999 in all 9 runs), while the table arm stays at ~10–11 ms throughout — roughly 16× at 1,000 rows and 350× at 10,000 rows.
+
+The blocks below are the median-slope run in each arm. The full 120-point dataset is in [`docs/reports/data/view-latency-2.6.1.csv`](docs/reports/data/view-latency-2.6.1.csv) and the analysis, methods, and limitations are in [`docs/reports/view-latency-2.6.1-retest.md`](docs/reports/view-latency-2.6.1-retest.md).
+
+View subscription — run `view_r3_a3` (grows with row count):
+```
+$ spacetime publish view-latency --bin-path target/wasm32-unknown-unknown/release/module.wasm --clear-database --yes && \
+  ./target/release/roundtrip_latency_test --subscribe-to view
+=== SUMMARY ===
+ Total messages     Avg (ms)     P50 (ms)     P99 (ms)
+      1000       163.20       127.82       458.33
+      2000       612.37       577.79      1349.10
+      3000      1043.35      1009.40      2198.83
+      4000      1469.01      1435.60      3038.12
+      5000      1891.45      1858.49      3877.35
+      6000      2321.13      2281.45      4735.02
+      7000      2741.87      2707.43      5561.73
+      8000      3157.72      3127.34      6387.80
+      9000      3589.59      3557.09      7245.89
+     10000      4038.45      4001.43      8138.07
+```
+
+Table subscription — run `table_r1` (stays flat):
+```
+$ spacetime publish view-latency --bin-path target/wasm32-unknown-unknown/release/module.wasm --clear-database --yes && \
+  ./target/release/roundtrip_latency_test --subscribe-to table
+=== SUMMARY ===
+ Total messages     Avg (ms)     P50 (ms)     P99 (ms)
+      1000        10.33        10.23        14.70
+      2000        10.83        11.29        15.15
+      3000        10.69        10.36        14.95
+      4000        11.13        10.49        15.81
+      5000        11.25        11.54        15.68
+      6000        11.60        11.40        15.68
+      7000        10.89        10.71        15.00
+      8000        11.00        10.79        15.57
+      9000        10.57        10.83        15.30
+     10000        11.58        10.90        15.93
+```
+
+![view vs table round-trip latency on SpacetimeDB v2.6.1](docs/reports/view-latency-2.6.1.svg)
+
+Note: absolute latencies in the different version sections above were measured on different hardware and software environments and are not a controlled cross-version benchmark. The signal is the view-vs-table shape difference within a version, not the absolute numbers.
