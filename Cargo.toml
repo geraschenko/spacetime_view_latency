@@ -3,7 +3,7 @@ resolver = "2"
 members = ["module", "roundtrip_latency_test"]
 
 [workspace.dependencies]
-spacetimedb = "=2.2.0"
-spacetimedb-sdk = "=2.2.0"
+spacetimedb = "=2.6.1"
+spacetimedb-sdk = "=2.6.1"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
