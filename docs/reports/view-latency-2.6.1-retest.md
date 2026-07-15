@@ -9,7 +9,7 @@ This report is behavioral only. It does not identify a mechanism, prove any asym
 ## Setup
 
 - **Module (unchanged):** the `messages` table, a trivial pass-through `messages_view` (`ctx.from.messages()`), and the `append_message` reducer.
-- **Client (unchanged):** `roundtrip_latency_test`, `BATCH_SIZE = 1000 × NUM_BATCHES = 10 = 10,000` `append_message` calls, measuring the round trip from reducer call to its appearance in the active subscription. The original **concurrent** path is used: all 1,000 appends in a batch are in flight at once. **Confirmed reads are on** (the 2.6.1 default), so each measured latency includes the confirmation round trip.
+- **Client (unchanged):** `roundtrip_latency_test`, `BATCH_SIZE = 1000, NUM_BATCHES = 10 → 10,000` `append_message` calls, measuring the round trip from reducer call to its appearance in the active subscription. The original **concurrent** path is used: all 1,000 appends in a batch are in flight at once. **Confirmed reads are on** (the 2.6.1 default), so each measured latency includes the confirmation round trip.
 - **Doses:** ten cumulative points, 1,000 → 10,000 rows (one per batch).
 - **Arms:** `--subscribe-to view` and `--subscribe-to table`, each from a **fresh database** (`spacetime publish … --clear-database` before the arm; every run's first dose is at 1,000 rows).
 - **Versions:** SpacetimeDB standalone, SDK, and CLI all **2.6.1** (official release; embedded release commit `052c83f…`, cited as release-build provenance, not a source build to reproduce). Measurements were taken against a local standalone 2.6.1 server.
@@ -77,7 +77,7 @@ The nine view trajectories exist because three repetitions each reached a cap of
 ## Limitations
 
 - **Single shared host** under external compile load; the two arms were **not run simultaneously**.
-- **Absolute values are regime- and host-specific** and are plausibly inflated by an unknown factor; only the within-run shape and the arm differential (including the ~16×/~350× ratios) are claimed.
+- **Absolute values are regime- and host-specific** and are plausibly inflated by an unknown factor; only the within-run shape and the existence/growth of the arm differential are claimed. The ~16×/~350× ratios describe this dataset and are regime/host-specific, not calibrated constants.
 - **Client round trips do not identify a mechanism** and do not decompose queueing, subscription update, cache update, and view evaluation. The concurrent 1,000-in-flight regime is part of the measured end-to-end workload; its costs are not separated out.
 - **No controlled cross-version magnitude claim.** Absolute numbers in this repository's different version sections came from different environments and are not a controlled 2.2.0-vs-2.6.1 benchmark.
 
@@ -104,4 +104,4 @@ spacetime publish view-latency --bin-path target/wasm32-unknown-unknown/release/
 
 Each arm prints a ten-row `=== SUMMARY ===` block through 10,000 messages. The signal is the shape difference between the arms: view `avg_ms` rises steeply with row count while table `avg_ms` stays approximately flat. Absolute magnitudes depend on the host and regime and are not expected to match the aggregate above.
 
-**Separate command-path confirmation.** As a separate check — **not pooled into the nine-view / three-table aggregate above** — this exact command path was run once per arm from a fresh database on the same 2.6.1 standalone server. Both arms completed cleanly through all ten doses to 10,000 rows. The view arm rose from `avg_ms` 168.03 at 1,000 rows to 4,214.18 at 10,000 rows (~25×); the table arm stayed flat, 12.29 at 1,000 rows to 10.03 at 10,000 rows (~0.8×). This reproduces the view-grows / table-flat shape through the documented path, on a single run rather than the replicated study.
+**Separate command-path confirmation.** As a separate check — **not pooled into the nine-view / three-table aggregate above** — this exact command path was run once per arm from a fresh database against a freshly started official 2.6.1 standalone server (a separate instance from the aggregate study, same release build). Both arms completed cleanly through all ten doses to 10,000 rows. The view arm rose from `avg_ms` 168.03 at 1,000 rows to 4,214.18 at 10,000 rows (~25×); the table arm stayed flat, 12.29 at 1,000 rows to 10.03 at 10,000 rows (~0.8×). This reproduces the view-grows / table-flat shape through the documented path, on a single run rather than the replicated study.
